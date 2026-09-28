@@ -10,6 +10,7 @@ app.use(express.json());
 const WP_URL = process.env.WORDPRESS_URL;
 const WP_USER = process.env.WORDPRESS_USERNAME;
 const WP_PASSWORD = process.env.WORDPRESS_APPLICATION_PASSWORD;
+const transports = new Map();
 
 function wpHeaders() {
   const auth = Buffer.from(`${WP_USER}:${WP_PASSWORD}`).toString("base64");
@@ -46,7 +47,7 @@ function createMcpServer() {
 
   server.tool(
     "listar_posts",
-    "Lista os posts do WordPress da Prática Pública.",
+    "Lista os posts do WordPress da Pratica Publica.",
     {
       quantidade: z.number().int().min(1).max(100).optional()
     },
@@ -84,7 +85,7 @@ function createMcpServer() {
 
   server.tool(
     "listar_categorias",
-    "Lista as categorias disponíveis no WordPress.",
+    "Lista as categorias disponiveis no WordPress.",
     {},
     async () => {
       const categories = await wordpress("/categories?per_page=100");
@@ -100,7 +101,7 @@ function createMcpServer() {
 
   server.tool(
     "criar_rascunho",
-    "Cria um novo post como rascunho. Não publica automaticamente.",
+    "Cria um novo post como rascunho. Nao publica automaticamente.",
     {
       titulo: z.string(),
       conteudo: z.string(),
@@ -143,28 +144,39 @@ function createMcpServer() {
 app.get("/", (req, res) => {
   res.json({
     status: "online",
-    service: "Prática Pública WordPress MCP"
+    service: "Pratica Publica WordPress MCP"
   });
 });
 
 app.post("/mcp", async (req, res) => {
-  const server = createMcpServer();
+  const existingSessionId = req.headers["mcp-session-id"];
+  let transport = existingSessionId ? transports.get(existingSessionId) : undefined;
 
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => randomUUID()
-  });
+  if (!transport) {
+    const server = createMcpServer();
 
-  res.on("close", () => {
-    transport.close();
-    server.close();
-  });
+    transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+      onsessioninitialized: (sessionId) => {
+        transports.set(sessionId, transport);
+      }
+    });
 
-  await server.connect(transport);
+    transport.onclose = () => {
+      if (transport.sessionId) {
+        transports.delete(transport.sessionId);
+      }
+      server.close();
+    };
+
+    await server.connect(transport);
+  }
+
   await transport.handleRequest(req, res, req.body);
 });
 
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`Prática Pública MCP rodando na porta ${PORT}`);
+  console.log(`Pratica Publica MCP rodando na porta ${PORT}`);
 });
