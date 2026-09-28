@@ -1,0 +1,14 @@
+{
+  "name": "pratica-publica-mcp",
+  "version": "1.0.0",
+  "description": "Servidor MCP para integração do ChatGPT com o WordPress da Prática Pública",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.0",
+    "express": "^5.1.0"
+  }
+}
