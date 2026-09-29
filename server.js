@@ -395,6 +395,74 @@ function createMcpServer() {
     }
   );
 
+  server.tool(
+    "otimizar_post_seo",
+    "Atualiza apenas conteudo, resumo, tags e campos de SEO de um post existente, preservando categoria e imagem destacada.",
+    {
+      post_id: z.number().int(),
+      titulo: z.string().optional(),
+      conteudo_html: z.string().optional(),
+      resumo: z.string().optional(),
+      slug: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      seo_titulo: z.string().optional(),
+      seo_descricao: z.string().optional(),
+      seo_frase_chave: z.string().optional(),
+      social_titulo: z.string().optional(),
+      social_descricao: z.string().optional()
+    },
+    async (args) => {
+      const body = {};
+
+      if (args.titulo) body.title = args.titulo;
+      if (args.conteudo_html) body.content = args.conteudo_html;
+      if (args.resumo) body.excerpt = args.resumo;
+      if (args.slug) body.slug = args.slug;
+
+      if (args.tags) {
+        const tagIds = [];
+        for (const tag of args.tags) {
+          tagIds.push(await ensureTerm("tags", tag));
+        }
+        body.tags = tagIds;
+      }
+
+      const meta = {};
+      if (args.seo_titulo) meta._yoast_wpseo_title = args.seo_titulo;
+      if (args.seo_descricao) meta._yoast_wpseo_metadesc = args.seo_descricao;
+      if (args.seo_frase_chave) meta._yoast_wpseo_focuskw = args.seo_frase_chave;
+      if (args.social_titulo) {
+        meta["_yoast_wpseo_opengraph-title"] = args.social_titulo;
+        meta["_yoast_wpseo_twitter-title"] = args.social_titulo;
+      }
+      if (args.social_descricao) {
+        meta["_yoast_wpseo_opengraph-description"] = args.social_descricao;
+        meta["_yoast_wpseo_twitter-description"] = args.social_descricao;
+      }
+      if (Object.keys(meta).length > 0) body.meta = meta;
+
+      const post = await wordpress(`/posts/${args.post_id}`, {
+        method: "POST",
+        body: JSON.stringify(body)
+      });
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            sucesso: true,
+            id: post.id,
+            titulo: post.title?.rendered,
+            status: post.status,
+            slug: post.slug,
+            link: post.link,
+            seo_meta_observacao: Object.keys(meta).length > 0 ? "Campos Yoast otimizados via REST API." : null
+          }, null, 2)
+        }]
+      };
+    }
+  );
+
   return server;
 }
 
