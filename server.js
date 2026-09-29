@@ -257,42 +257,37 @@ function createMcpServer() {
         media = await uploadMedia(args);
       }
 
-      const customFields = [];
-      if (args.seo_titulo) customFields.push({ key: "_yoast_wpseo_title", value: args.seo_titulo });
-      if (args.seo_descricao) customFields.push({ key: "_yoast_wpseo_metadesc", value: args.seo_descricao });
-      if (args.seo_frase_chave) customFields.push({ key: "_yoast_wpseo_focuskw", value: args.seo_frase_chave });
+      const meta = {};
+      if (args.seo_titulo) meta._yoast_wpseo_title = args.seo_titulo;
+      if (args.seo_descricao) meta._yoast_wpseo_metadesc = args.seo_descricao;
+      if (args.seo_frase_chave) meta._yoast_wpseo_focuskw = args.seo_frase_chave;
       if (args.social_titulo) {
-        customFields.push({ key: "_yoast_wpseo_opengraph-title", value: args.social_titulo });
-        customFields.push({ key: "_yoast_wpseo_twitter-title", value: args.social_titulo });
+        meta["_yoast_wpseo_opengraph-title"] = args.social_titulo;
+        meta["_yoast_wpseo_twitter-title"] = args.social_titulo;
       }
       if (args.social_descricao) {
-        customFields.push({ key: "_yoast_wpseo_opengraph-description", value: args.social_descricao });
-        customFields.push({ key: "_yoast_wpseo_twitter-description", value: args.social_descricao });
+        meta["_yoast_wpseo_opengraph-description"] = args.social_descricao;
+        meta["_yoast_wpseo_twitter-description"] = args.social_descricao;
       }
 
-      const xmlResult = await xmlRpc("wp.newPost", [
-        1,
-        WP_USER,
-        WP_PASSWORD,
-        {
-          post_type: "post",
-          post_status: args.status,
-          post_title: args.titulo,
-          post_content: args.conteudo_html,
-          post_excerpt: args.resumo,
-          post_name: args.slug,
-          post_date: new Date(args.data_iso),
-          post_thumbnail: media?.id || 0,
-          terms_names: {
-            category: [args.categoria],
-            post_tag: args.tags || []
-          },
-          custom_fields: customFields
-        }
-      ]);
+      const body = {
+        title: args.titulo,
+        content: args.conteudo_html,
+        excerpt: args.resumo,
+        slug: args.slug,
+        status: args.status,
+        date: args.data_iso,
+        categories: [categoryId],
+        tags: tagIds,
+        meta
+      };
 
-      const postId = Number(firstXmlString(xmlResult));
-      const post = await wordpress(`/posts/${postId}`);
+      if (media) body.featured_media = media.id;
+
+      const post = await wordpress("/posts", {
+        method: "POST",
+        body: JSON.stringify(body)
+      });
 
       return {
         content: [{
@@ -306,7 +301,7 @@ function createMcpServer() {
             slug: post.slug,
             link: post.link,
             imagem_destacada: media ? { id: media.id, link: media.source_url } : null,
-            seo_meta_observacao: customFields.length > 0 ? "Campos Yoast enviados como custom_fields via XML-RPC." : null
+            seo_meta_observacao: Object.keys(meta).length > 0 ? "Campos Yoast enviados via REST API." : null
           }, null, 2)
         }]
       };
