@@ -308,6 +308,93 @@ function createMcpServer() {
     }
   );
 
+  server.tool(
+    "atualizar_post_completo",
+    "Atualiza post existente no WordPress com conteudo, data, categoria, tags, imagem destacada e metadados de SEO.",
+    {
+      post_id: z.number().int(),
+      titulo: z.string(),
+      conteudo_html: z.string(),
+      slug: z.string(),
+      resumo: z.string(),
+      categoria: z.string(),
+      tags: z.array(z.string()).optional(),
+      status: z.enum(["publish", "future", "draft"]),
+      data_iso: z.string(),
+      imagem_base64: z.string().optional(),
+      nome_arquivo: z.string().optional(),
+      mime_type: z.string().optional(),
+      alt_text: z.string().optional(),
+      seo_titulo: z.string().optional(),
+      seo_descricao: z.string().optional(),
+      seo_frase_chave: z.string().optional(),
+      social_titulo: z.string().optional(),
+      social_descricao: z.string().optional()
+    },
+    async (args) => {
+      const categoryId = await ensureTerm("categories", args.categoria);
+      const tagIds = [];
+
+      for (const tag of args.tags || []) {
+        tagIds.push(await ensureTerm("tags", tag));
+      }
+
+      let media;
+      if (args.imagem_base64 && args.nome_arquivo && args.mime_type) {
+        media = await uploadMedia(args);
+      }
+
+      const meta = {};
+      if (args.seo_titulo) meta._yoast_wpseo_title = args.seo_titulo;
+      if (args.seo_descricao) meta._yoast_wpseo_metadesc = args.seo_descricao;
+      if (args.seo_frase_chave) meta._yoast_wpseo_focuskw = args.seo_frase_chave;
+      if (args.social_titulo) {
+        meta["_yoast_wpseo_opengraph-title"] = args.social_titulo;
+        meta["_yoast_wpseo_twitter-title"] = args.social_titulo;
+      }
+      if (args.social_descricao) {
+        meta["_yoast_wpseo_opengraph-description"] = args.social_descricao;
+        meta["_yoast_wpseo_twitter-description"] = args.social_descricao;
+      }
+
+      const body = {
+        title: args.titulo,
+        content: args.conteudo_html,
+        excerpt: args.resumo,
+        slug: args.slug,
+        status: args.status,
+        date: args.data_iso,
+        categories: [categoryId],
+        tags: tagIds,
+        meta
+      };
+
+      if (media) body.featured_media = media.id;
+
+      const post = await wordpress(`/posts/${args.post_id}`, {
+        method: "POST",
+        body: JSON.stringify(body)
+      });
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            sucesso: true,
+            id: post.id,
+            titulo: post.title?.rendered,
+            status: post.status,
+            data: post.date,
+            slug: post.slug,
+            link: post.link,
+            imagem_destacada: media ? { id: media.id, link: media.source_url } : null,
+            seo_meta_observacao: Object.keys(meta).length > 0 ? "Campos Yoast atualizados via REST API." : null
+          }, null, 2)
+        }]
+      };
+    }
+  );
+
   return server;
 }
 
